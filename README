@@ -1,0 +1,45 @@
+# PassMan
+
+Password Manager CLI written in Rust.
+
+When run for the first time the user will be prompted to create a password (kind of ironic, I know). 
+
+The user will have to input this password to access the program on subsequent uses.
+
+# Usage
+```
+passman <subcommand>
+```
+Subcommands and their usage listed below.
+
+# Subcommands
+
+## Generate
+Generates passwords of length \<length> and optionally saves record of generated password with \<website>
+```
+passman generate [OPTIONS] <length>
+
+OPTIONS:
+    -s, --store <website>
+```
+
+## List
+Lists records of all websites with saved passwords OR lists password of \<website>.
+```
+passman list [OPTIONS]
+
+OPTIONS:
+    -w, --website <website>
+```
+
+## Update
+Generates new password for \<website> and updates record.
+```
+passman update <website>
+```
+
+## Delete
+Deletes record for \<website>
+```
+passman delete <website>
+```
