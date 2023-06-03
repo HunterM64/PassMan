@@ -22,6 +22,10 @@ use whoami;
 use sqlite::{self, State, Connection};
 use rpassword;
 use std::{hash::{Hash, Hasher}, collections::hash_map::DefaultHasher};
+use magic_crypt::{new_magic_crypt, MagicCryptTrait};
+use rand::{thread_rng};
+use rand::seq::IteratorRandom;
+
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "passman", about = "command line password manager")]
@@ -161,22 +165,40 @@ fn match_subcommand() {
         },
 
         PassMan::Update { website } => {
-            println!("update {website}");
+            update(website);
         },
 
         PassMan::Delete { website } => {
-            println!("delete {website}");
+            delete(website);
         }
     }
 }
 
 /// Returns a password of length given
 fn generate(length: u32, website: Option<String>) {
+
+    let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()-_=+"; //characters that passwords can use
+    let mut rng = thread_rng(); 
+    let mut generated_password = String::from("");
+
+    // generate password
+    for _ in 0..length {
+        // println!("{}", characters.chars().choose(&mut rng).unwrap());
+        generated_password.push(characters.chars().choose(&mut rng).unwrap());
+    }
+    println!("{generated_password}");
+
+    let mc = new_magic_crypt!("magickey", 256);
+    
     println!("{}", length);
     match website {
         None => {},
         Some(name) => {
             println!("you entered {name}");
+            let base64 = mc.encrypt_str_to_base64(name);
+            println!("{base64}");
+            let d_base64 = mc.decrypt_base64_to_string(&base64).unwrap();
+            println!("{d_base64}");
         }
     }
 }
@@ -190,6 +212,14 @@ fn list(website: Option<String>) {
             println!("Here is the password of {website_name}:");
         } // list password of website
     }
+}
+
+fn update(website: String) {
+    println!("update {website}");
+}
+
+fn delete(website: String) {
+    println!("delete {website}");
 }
 
 /// Setup database for PassMan if it doesn't exist already
