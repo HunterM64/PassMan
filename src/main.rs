@@ -21,6 +21,7 @@ use structopt::StructOpt;
 use whoami;
 use sqlite::{self, State, Connection};
 use rpassword;
+use std::{hash::{Hash, Hasher}, collections::hash_map::DefaultHasher};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "passman", about = "command line password manager")]
@@ -110,7 +111,8 @@ fn main() {
         let line = rpassword::prompt_password("Enter password: ").unwrap();
 
         // check that password entered matches password in database
-        if password.eq(&line) { // check hash not actual plaintext
+        let line_hash = (calc_hash(&line)).to_string();
+        if password.eq(&line_hash) { // check hash not actual plaintext
             // If so, execute command
             match_subcommand();
         } else {
@@ -132,8 +134,11 @@ fn main() {
 
         // make sure both passwords match
         if line_verification.eq(&line) {
+            // calc hash
+            let line_hash = (calc_hash(&line)).to_string();
+
             // insert into database
-            let query = format!("INSERT INTO users VALUES ('{username}', '{line}');"); // hash this lmao
+            let query = format!("INSERT INTO users VALUES ('{username}', '{line_hash}');"); // hash this lmao
             conn_users.execute(query).unwrap();
 
             println!("User successfully created!\nPlease rerun your previous command to start using PassMan.");
@@ -201,4 +206,10 @@ fn setup_user_db() -> Connection {
 
     // return connnection to database
     return conn;
+}
+
+fn calc_hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    return s.finish();
 }
