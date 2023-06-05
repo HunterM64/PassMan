@@ -3,18 +3,12 @@
         make it have Create, Read, Update, Delete functionality
 
         CREATE: - generate
-            generate random passwords of given length
-            save generated passwords under passwords table (username, website_name, password)
             possibly copy password to clipboard
-        READ: - list
-            List all websites that have passwords saved if given no args, list password of entered website if given
         UPDATE: - update
             give name of website you want to regenerate a password for
             update password in db
         DELETE: - delete
             give name of website to delete record of in db
-
-        encryption for all saved passwords
  */
 
 use structopt::StructOpt;
@@ -101,6 +95,8 @@ fn main() {
         }
     }
 
+    drop(stmt);
+
     if existing {
         // Need to authenticate with password
 
@@ -118,7 +114,7 @@ fn main() {
         let line_hash = (calc_hash(&line)).to_string();
         if password.eq(&line_hash) { // check hash not actual plaintext
             // If so, execute command
-            match_subcommand();
+            match_subcommand(username, line);
         } else {
             // Reject
             println!("Incorrect Password!");
@@ -150,18 +146,21 @@ fn main() {
             println!("Passwords do not match!");
         }
     }
+
+    drop(conn_users);
+
 }
 
 /// executes the proper subcommand based on the command line arguments given
-fn match_subcommand() {
+fn match_subcommand(username: String, password: String) {
     let opt = PassMan::from_args();
     match opt {
         PassMan::Generate { length, website } => {
-            generate(length, website);
+            generate(length, website, username, password);
         },
 
         PassMan::List { website } => {
-            list(website);
+            list(website, username, password);
         },
 
         PassMan::Update { website } => {
@@ -175,7 +174,7 @@ fn match_subcommand() {
 }
 
 /// Returns a password of length given
-fn generate(length: u32, website: Option<String>) {
+fn generate(length: u32, website: Option<String>, username: String, password: String) {
 
     let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()-_=+"; //characters that passwords can use
     let mut rng = thread_rng(); 
@@ -186,31 +185,68 @@ fn generate(length: u32, website: Option<String>) {
         // println!("{}", characters.chars().choose(&mut rng).unwrap());
         generated_password.push(characters.chars().choose(&mut rng).unwrap());
     }
-    println!("{generated_password}");
-
-    let mc = new_magic_crypt!("magickey", 256);
+    println!("Password is: {generated_password}");
     
-    println!("{}", length);
     match website {
         None => {},
         Some(name) => {
-            println!("you entered {name}");
-            let base64 = mc.encrypt_str_to_base64(name);
-            println!("{base64}");
-            let d_base64 = mc.decrypt_base64_to_string(&base64).unwrap();
-            println!("{d_base64}");
+            // save to database
+            println!("Saving record for {name}...");
+            
+            // encrypt password first
+            let mc = new_magic_crypt!(password, 256);
+            let encrypted_password = mc.encrypt_str_to_base64(generated_password);
+
+            // connect to database
+            let conn = sqlite::open("test.db").unwrap();
+
+            // insert password into db
+            let query = format!("INSERT INTO passwords VALUES ('{username}', '{name}', '{encrypted_password}');");
+            conn.execute(query).unwrap();
+
+            println!("Password saved successfuly.");
+            
+            drop(conn);
         }
     }
 }
 
-fn list(website: Option<String>) {
+fn list(website: Option<String>, username: String, password: String) {
     match website {
         None => {
-            println!("Here are all the websites with saved passwords:")
-        }, // list all websites with saved passwords
+            println!("Here are all the websites with saved passwords:");
+
+            // db stuff
+            let conn = sqlite::open("test.db").unwrap();
+            let query = format!("SELECT website_name FROM passwords WHERE username = '{username}'");
+            let mut stmt = conn.prepare(query).unwrap();
+
+            // list all the websites
+            while let Ok(State::Row) = stmt.next() {
+                println!("{}", stmt.read::<String, _>("website_name").unwrap());
+            }
+
+            drop(stmt);
+            drop(conn);
+        },
         Some(website_name) => {
-            println!("Here is the password of {website_name}:");
-        } // list password of website
+            
+            // db stuff
+            let conn = sqlite::open("test.db").unwrap();
+            let query = format!("SELECT password from passwords WHERE website_name = '{website_name}'");
+            let mut stmt = conn.prepare(query).unwrap();
+
+            while let Ok(State::Row) = stmt.next() {
+                let encrypted_password = stmt.read::<String, _>("password").unwrap();
+                let mc = new_magic_crypt!(password.clone(), 256);
+                let decrypted_password = mc.decrypt_base64_to_string(&encrypted_password).unwrap();
+
+                println!("Here is the password of {website_name}: {decrypted_password}");
+            }
+
+            drop(stmt);
+            drop(conn);
+        } 
     }
 }
 
