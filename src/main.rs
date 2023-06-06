@@ -15,10 +15,17 @@ use structopt::StructOpt;
 use whoami;
 use sqlite::{self, State, Connection};
 use rpassword;
-use std::{hash::{Hash, Hasher}, collections::hash_map::DefaultHasher};
+// use std::{hash::{Hash, Hasher}, collections::hash_map::DefaultHasher};
 use magic_crypt::{new_magic_crypt, MagicCryptTrait};
 use rand::{thread_rng};
 use rand::seq::IteratorRandom;
+use argon2::{
+    password_hash::{
+        rand_core::OsRng,
+        PasswordHash, PasswordHasher, PasswordVerifier, SaltString
+    },
+    Argon2
+};
 
 
 #[derive(Debug, StructOpt)]
@@ -82,12 +89,12 @@ fn main() {
     let mut stmt = conn_users.prepare(query).unwrap();
 
     // might as well get password while we're at it
-    let mut password = String::new();
+    let mut db_password = String::new();
 
     // unoptimized as shit!
     while let Ok(State::Row) = stmt.next() {
         let name = stmt.read::<String, _>("name").unwrap();
-        password = stmt.read::<String, _>("password").unwrap();
+        db_password = stmt.read::<String, _>("password").unwrap();
 
         if name.eq(&username) {
             existing = true;
@@ -111,8 +118,11 @@ fn main() {
         let line = rpassword::prompt_password("Enter password: ").unwrap();
 
         // check that password entered matches password in database
-        let line_hash = (calc_hash(&line)).to_string();
-        if password.eq(&line_hash) { // check hash not actual plaintext
+        
+        let parsed_db_password = PasswordHash::new(&db_password).unwrap();
+
+
+        if Argon2::default().verify_password(line.as_bytes(), &parsed_db_password).is_ok() { // check hash not actual plaintext
             // If so, execute command
             match_subcommand(username, line);
         } else {
@@ -135,7 +145,11 @@ fn main() {
         // make sure both passwords match
         if line_verification.eq(&line) {
             // calc hash
-            let line_hash = (calc_hash(&line)).to_string();
+            let salt = SaltString::generate(&mut OsRng);
+            let argon2 = Argon2::default();
+
+            let line_hash = argon2.hash_password(line.as_bytes(), &salt).unwrap().to_string();
+            println!("{}", line_hash);
 
             // insert into database
             let query = format!("INSERT INTO users VALUES ('{username}', '{line_hash}');"); // hash this lmao
@@ -274,8 +288,8 @@ fn setup_user_db() -> Connection {
     return conn;
 }
 
-fn calc_hash<T: Hash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    return s.finish();
-}
+// fn calc_hash<T: Hash>(t: &T) -> u64 {
+//     let mut s = DefaultHasher::new();
+//     t.hash(&mut s);
+//     return s.finish();
+// }
