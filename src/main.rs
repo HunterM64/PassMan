@@ -124,7 +124,7 @@ fn main() {
 
         if Argon2::default().verify_password(line.as_bytes(), &parsed_db_password).is_ok() { // check hash not actual plaintext
             // If so, execute command
-            match_subcommand(username, line);
+            match_subcommand(username, db_password);
         } else {
             // Reject
             println!("Incorrect Password!");
@@ -190,15 +190,17 @@ fn match_subcommand(username: String, password: String) {
 /// Returns a password of length given
 fn generate(length: u32, website: Option<String>, username: String, password: String) {
 
-    let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()-_=+"; //characters that passwords can use
-    let mut rng = thread_rng(); 
-    let mut generated_password = String::from("");
-
-    // generate password
-    for _ in 0..length {
-        // println!("{}", characters.chars().choose(&mut rng).unwrap());
-        generated_password.push(characters.chars().choose(&mut rng).unwrap());
+    if length < 4 {
+        println!("I need at least 4 as the length.");
+        return;
     }
+    
+    if length < 8 {
+        println!("I would heavily consider making your password length at least 8 characters.");
+    }
+
+    let generated_password = generate_password(length);
+
     println!("Password is: {generated_password}");
     
     match website {
@@ -286,6 +288,46 @@ fn setup_user_db() -> Connection {
 
     // return connnection to database
     return conn;
+}
+
+/// Returns a randomly generated password that is <length> characters long
+fn generate_password(length: u32) -> String {
+    
+    let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!@#$%^&*()-_=+"; //characters that passwords can use
+    let mut rng = thread_rng(); 
+    let mut generated_password = String::from("");
+
+    for _ in 0..length {
+        // println!("{}", characters.chars().choose(&mut rng).unwrap());
+        generated_password.push(characters.chars().choose(&mut rng).unwrap());
+    }
+
+    // verify password - i tried regex but i dont want to talk about it
+    while !(validate_password(generated_password.clone())) {
+        generated_password = generate_password(length);
+    }
+
+    return generated_password;
+}
+
+/// Returns true if password is valid, false otherwise.
+fn validate_password(password: String) -> bool {
+
+    let specialchars = "!@#$%^&*()-_=+";
+
+    let mut valid: bool = true;
+
+    if !(password.chars().any(|c| matches!(c, 'a'..='z'))) {
+        valid = false;
+    } else if !(password.chars().any(|c| matches!(c, 'A'..='Z'))) {
+        valid = false;
+    } else if !(password.chars().any(|c| matches!(c, '0'..='9'))) {
+        valid = false;
+    } else if !(password.chars().any(|c| specialchars.contains(c))) {
+        valid = false;
+    }
+
+    return valid;
 }
 
 // fn calc_hash<T: Hash>(t: &T) -> u64 {
