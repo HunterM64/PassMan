@@ -149,7 +149,6 @@ fn main() {
             let argon2 = Argon2::default();
 
             let line_hash = argon2.hash_password(line.as_bytes(), &salt).unwrap().to_string();
-            println!("{}", line_hash);
 
             // insert into database
             let query = format!("INSERT INTO users VALUES ('{username}', '{line_hash}');"); // hash this lmao
