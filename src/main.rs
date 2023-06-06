@@ -26,6 +26,7 @@ use argon2::{
     },
     Argon2
 };
+use terminal_clipboard;
 
 
 #[derive(Debug, StructOpt)]
@@ -60,6 +61,9 @@ enum PassMan { // struct for command line arguments
     #[structopt(name = "update")]
     /// Updates password of given website
     Update {
+
+        /// Length of new password
+        length: u32,
         /// Website to generate new password for
         website: String,
     },
@@ -176,8 +180,8 @@ fn match_subcommand(username: String, password: String) {
             list(website, username, password);
         },
 
-        PassMan::Update { website } => {
-            update(website);
+        PassMan::Update { length, website } => {
+            update(length, website, password);
         },
 
         PassMan::Delete { website } => {
@@ -201,6 +205,11 @@ fn generate(length: u32, website: Option<String>, username: String, password: St
     let generated_password = generate_password(length);
 
     println!("Password is: {generated_password}");
+
+    // copy to  clipboard - doesn't work on macOS at least
+    terminal_clipboard::set_string(generated_password.clone()).unwrap();
+
+    println!("Password has been copied to clipboard (hopefully).");
     
     match website {
         None => {},
@@ -265,12 +274,44 @@ fn list(website: Option<String>, username: String, password: String) {
     }
 }
 
-fn update(website: String) {
-    println!("update {website}");
+fn update(length: u32, website: String, password: String) {
+    
+    println!("Generating new password for {website}...");
+
+    let generated_password = generate_password(length);
+
+    println!("New password is {}", generated_password);
+
+    terminal_clipboard::set_string(generated_password.clone()).unwrap();
+
+    println!("Password has been copied to clipboard (hopefully).");
+    
+    println!("Saving password to db...");
+
+    // encrypt password first
+    let mc = new_magic_crypt!(password, 256);
+    let encrypted_password = mc.encrypt_str_to_base64(generated_password);
+
+    // connect to database
+    let conn = sqlite::open("test.db").unwrap();
+
+    // insert password into db
+    let query = format!("UPDATE passwords SET password = '{encrypted_password}' WHERE website_name = '{website}'");
+    conn.execute(query).unwrap();
+
+    println!("Password saved!");
+
+    drop(conn);
 }
 
 fn delete(website: String) {
-    println!("delete {website}");
+    println!("Deleting record for {website}...");
+
+    let conn = sqlite::open("test.db").unwrap();
+    let query = format!("DELETE FROM passwords WHERE website_name = '{website}'");
+    conn.execute(query).unwrap();
+
+    println!("Record deleted!");
 }
 
 /// Setup database for PassMan if it doesn't exist already
@@ -328,9 +369,3 @@ fn validate_password(password: String) -> bool {
 
     return valid;
 }
-
-// fn calc_hash<T: Hash>(t: &T) -> u64 {
-//     let mut s = DefaultHasher::new();
-//     t.hash(&mut s);
-//     return s.finish();
-// }

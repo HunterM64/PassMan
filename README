@@ -35,7 +35,7 @@ OPTIONS:
 ## Update
 Generates new password for \<website> and updates record.
 ```
-passman update <website>
+passman update <length> <website>
 ```
 
 ## Delete
